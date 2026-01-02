@@ -35,25 +35,38 @@ void Board::place(const std::array<Point,4> &blocks, const Point &pos, int color
     }
 }
 
-int Board::clearFullLines(){
-    int lines = 0;
-    int write = BoardHeight - 1;
-    for (int y = BoardHeight - 1; y >= 0; --y) {
+std::vector<int> Board::getFullLines() const {
+    std::vector<int> lines;
+    for (int y = 0; y < BoardHeight; ++y) {
         bool full = true;
         for (int x = 0; x < BoardWidth; ++x) {
             if (grid[y][x].color == -1) { full = false; break; }
         }
-        if (!full) {
-            if (write != y) grid[write] = grid[y];
-            --write;
-        } else {
-            ++lines;
-        }
+        if (full) lines.push_back(y);
     }
-    // Clear remaining rows
-    for (int y = write; y >= 0; --y)
-        for (int x = 0; x < BoardWidth; ++x) grid[y][x].color = -1;
     return lines;
+}
+
+void Board::removeLines(const std::vector<int>& lines) {
+    if (lines.empty()) return;
+    // Create a new grid and copy rows that are not removed
+    std::array<std::array<Cell, BoardWidth>, BoardHeight> newGrid;
+    // Initialize new grid as empty
+    for (int y = 0; y < BoardHeight; ++y)
+        for (int x = 0; x < BoardWidth; ++x)
+            newGrid[y][x].color = -1;
+
+    int write = BoardHeight - 1;
+    for (int y = BoardHeight - 1; y >= 0; --y) {
+        if (std::find(lines.begin(), lines.end(), y) != lines.end()) {
+            // skip this row
+            continue;
+        }
+        // copy row y to write
+        newGrid[write] = grid[y];
+        --write;
+    }
+    grid = newGrid;
 }
 
 const Cell& Board::at(int x, int y) const { return grid[y][x]; }

@@ -13,3 +13,20 @@ Schnellstart
 3. Run: `build/bin/app[.exe]` (Windows) oder `./build/bin/app`
 
 Wenn CMake das SFML-Modul nicht findet, prüfen Sie den Pfad `D:/Programme/SFML-3.0.2/lib/cmake/SFML` und passen `SFML_DIR` entsprechend an.
+
+Sound & Assets
+- Optional: place `clear.wav` in the `assets/` folder to enable a line-clear sound effect. If not present, the game runs silently.
+ 
+Audio files (optional)
+- `clear.wav` : play on line clear
+- `rotate.wav`: play on piece rotation
+- `drop.wav`  : play on soft drop
+- `harddrop.wav`: play on hard drop
+ 
+Controls for audio
+- `M` : toggle mute
+- `[` : decrease volume by 10%
+- `]` : increase volume by 10%
+
+Scoring & Levels
+- Lines cleared give points: 1→100, 2→300, 3→500, 4→800, scaled by (level+1); level increases every 10 cleared lines and drop speed increases with level.

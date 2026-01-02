@@ -3,6 +3,7 @@
 #include "Types.hpp"
 #include <array>
 #include <optional>
+#include <vector>
 
 namespace tetris {
 
@@ -15,7 +16,10 @@ public:
     bool isOccupied(const Point &p) const;
     bool isValidPosition(const std::array<Point,4> &blocks, const Point &pos) const;
     void place(const std::array<Point,4> &blocks, const Point &pos, int color);
-    int clearFullLines();
+    // Find indices of full lines (0..BoardHeight-1). Does not remove them.
+    std::vector<int> getFullLines() const;
+    // Remove the given lines and shift above rows down.
+    void removeLines(const std::vector<int>& lines);
     const Cell& at(int x, int y) const;
 private:
     std::array<std::array<Cell, BoardWidth>, BoardHeight> grid;

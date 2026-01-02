@@ -11,7 +11,7 @@ endif()
 
 message(STATUS "Using SFML_DIR=${SFML_DIR}")
 
-find_package(SFML 3.0 COMPONENTS Graphics Window System REQUIRED)
+find_package(SFML 3.0 COMPONENTS Graphics Window System Audio REQUIRED)
 
 add_executable(app
     src/main.cpp
@@ -22,7 +22,7 @@ add_executable(app
 
 target_include_directories(app PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-target_link_libraries(app PRIVATE SFML::Graphics SFML::Window SFML::System)
+target_link_libraries(app PRIVATE SFML::Graphics SFML::Window SFML::System SFML::Audio)
 
 # Put binary in build/bin
 set_target_properties(app PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)

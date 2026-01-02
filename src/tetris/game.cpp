@@ -1,6 +1,8 @@
 #include "../../include/tetris/Game.hpp"
 #include <chrono>
 #include <sstream>
+#include <cmath>
+#include <algorithm>
 
 using namespace tetris;
 
@@ -21,6 +23,27 @@ Game::Game(sf::RenderWindow &window): m_window(window) {
     spawnPiece();
     // Load a system font if available
     m_fontLoaded = m_font.openFromFile("C:/Windows/Fonts/arial.ttf");
+    // Try to load sound effects from assets (optional)
+    m_clearSoundLoaded = m_clearBuffer.loadFromFile("assets/clear.wav");
+    if (m_clearSoundLoaded) {
+        m_clearSound = std::make_unique<sf::Sound>(m_clearBuffer);
+        m_clearSound->setVolume(m_volume);
+    }
+    m_rotateSoundLoaded = m_rotateBuffer.loadFromFile("assets/rotate.wav");
+    if (m_rotateSoundLoaded) {
+        m_rotateSound = std::make_unique<sf::Sound>(m_rotateBuffer);
+        m_rotateSound->setVolume(m_volume);
+    }
+    m_dropSoundLoaded = m_dropBuffer.loadFromFile("assets/drop.wav");
+    if (m_dropSoundLoaded) {
+        m_dropSound = std::make_unique<sf::Sound>(m_dropBuffer);
+        m_dropSound->setVolume(m_volume);
+    }
+    m_hardDropSoundLoaded = m_hardDropBuffer.loadFromFile("assets/harddrop.wav");
+    if (m_hardDropSoundLoaded) {
+        m_hardDropSound = std::make_unique<sf::Sound>(m_hardDropBuffer);
+        m_hardDropSound->setVolume(m_volume);
+    }
 }
 
 void Game::spawnPiece() {
@@ -61,15 +84,45 @@ void Game::processInput() {
                     int newRot = (m_active.rotation + 1) & 3;
                     auto blocks = Tetromino::getShape(m_active.type, newRot)[newRot];
                     if (m_board.isValidPosition(blocks, m_active.position)) m_active.rotation = newRot;
+                    if (m_dropSoundLoaded && m_dropSound) m_dropSound->play();
                 } else if (key == sf::Keyboard::Key::Space) {
                     hardDrop();
                 }
             } else if (!m_running && key == sf::Keyboard::Key::R) {
                 // restart
+                    if (m_rotateSoundLoaded && m_rotateSound) m_rotateSound->play();
                 m_board = Board();
                 m_running = true;
+                    if (m_hardDropSoundLoaded && m_hardDropSound) m_hardDropSound->play();
                 m_paused = false;
                 m_score = 0;
+            // Global input for audio controls
+            if (key == sf::Keyboard::Key::M) {
+                m_muted = !m_muted;
+                float v = m_muted ? 0.0f : m_volume;
+                if (m_clearSound && m_clearSoundLoaded) m_clearSound->setVolume(v);
+                if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(v);
+                if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(v);
+                if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(v);
+            }
+            if (key == sf::Keyboard::Key::LBracket) { // decrease volume
+                m_volume = std::max(0.0f, m_volume - 10.0f);
+                if (!m_muted) {
+                    if (m_clearSound && m_clearSoundLoaded) m_clearSound->setVolume(m_volume);
+                    if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(m_volume);
+                    if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(m_volume);
+                    if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(m_volume);
+                }
+            }
+            if (key == sf::Keyboard::Key::RBracket) { // increase volume
+                m_volume = std::min(100.0f, m_volume + 10.0f);
+                if (!m_muted) {
+                    if (m_clearSound && m_clearSoundLoaded) m_clearSound->setVolume(m_volume);
+                    if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(m_volume);
+                    if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(m_volume);
+                    if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(m_volume);
+                }
+            }
                 spawnPiece();
             }
         }
@@ -78,6 +131,27 @@ void Game::processInput() {
 
 void Game::update(float dt) {
     if (m_paused || !m_running) return;
+
+    // Handle line clear animation
+    if (m_animating) {
+        m_lineClearTimer += dt;
+        if (m_lineClearTimer >= m_lineClearDuration) {
+            // finalize clear
+            m_board.removeLines(m_linesToClear);
+            int n = static_cast<int>(m_linesToClear.size());
+            static const int baseScore[] = {0,100,300,500,800};
+            int gained = (n >=1 && n <=4) ? baseScore[n] * (m_level + 1) : 0;
+            m_score += gained;
+            m_totalLines += n;
+            m_level = m_totalLines / 10;
+            m_dropInterval = std::max(0.05f, 0.8f - m_level * 0.05f);
+            m_linesToClear.clear();
+            m_animating = false;
+            spawnPiece();
+        }
+        return;
+    }
+
     m_dropTimer += dt;
     if (m_dropTimer >= m_dropInterval) {
         m_dropTimer = 0.0f;
@@ -95,8 +169,14 @@ void Game::update(float dt) {
 void Game::lockPiece() {
     auto blocks = Tetromino::getShape(m_active.type, m_active.rotation)[m_active.rotation];
     m_board.place(blocks, m_active.position, static_cast<int>(m_active.type));
-    int cleared = m_board.clearFullLines();
-    m_score += cleared * 100;
+    // Find full lines and start clear animation if any
+    m_linesToClear = m_board.getFullLines();
+    if (!m_linesToClear.empty()) {
+        m_animating = true;
+        m_lineClearTimer = 0.0f;
+        if (m_clearSoundLoaded && m_clearSound) m_clearSound->play();
+        return; // wait until animation completes to remove lines and score
+    }
     spawnPiece();
 }
 
@@ -138,10 +218,26 @@ void Game::render() {
         }
     }
 
+    // If animating line clear, draw pulsing overlay on clearing rows
+    if (m_animating) {
+        float t = m_lineClearTimer / m_lineClearDuration; // 0..1
+        float alpha = 160.0f * (1.0f - std::cos(t * 3.14159f)); // fade in/out
+        for (int y : m_linesToClear) {
+            for (int x = 0; x < BoardWidth; ++x) {
+                sf::RectangleShape r(sf::Vector2f(CellSize - 2, CellSize - 2));
+                unsigned char a = static_cast<unsigned char>(std::clamp(alpha, 0.f, 255.f));
+                sf::Color c(255,255,255,a);
+                r.setFillColor(c);
+                r.setPosition(sf::Vector2f(static_cast<float>(x * CellSize + 1), static_cast<float>(y * CellSize + 1)));
+                m_window.draw(r);
+            }
+        }
+    }
+
     // draw simple UI: score and next piece (if font loaded)
     if (m_fontLoaded) {
         std::stringstream ss;
-        ss << "Score: " << m_score;
+        ss << "Score: " << m_score << "\nLevel: " << m_level << "\nLines: " << m_totalLines;
         sf::Text text(m_font, ss.str(), 16);
         text.setFillColor(sf::Color::White);
         text.setPosition(sf::Vector2f(static_cast<float>(BoardWidth * CellSize + 10), 10.f));
