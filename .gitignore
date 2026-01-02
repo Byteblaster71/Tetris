@@ -1,0 +1,19 @@
+# Build artifacts
+/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Visual Studio
+*.vcxproj.user
+*.sln
+
+# VS Code
+.vscode/
+
+# Other
+*.obj
+*.o
+*.exe
+*.dll
