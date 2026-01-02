@@ -60,6 +60,19 @@ private:
 
     float m_volume = 100.0f; // 0..100
     bool m_muted = false;
+    // UI sounds and voice
+    sf::SoundBuffer m_uiClickBuffer;
+    std::unique_ptr<sf::Sound> m_uiClickSound;
+    bool m_uiClickLoaded = false;
+
+    sf::SoundBuffer m_voiceLevelBuffer;
+    std::unique_ptr<sf::Sound> m_voiceLevelSound;
+    bool m_voiceLevelLoaded = false;
+
+    // Volume slider UI
+    bool m_showVolumeSlider = true;
+    sf::FloatRect m_volumeSliderRect; // in pixels, updated at render
+    bool m_draggingVolume = false;
     sf::Font m_font;
     bool m_fontLoaded = false;
 

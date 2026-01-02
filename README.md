@@ -23,6 +23,10 @@ Audio files (optional)
 - `drop.wav`  : play on soft drop
 - `harddrop.wav`: play on hard drop
  
+UI & Voice assets (optional)
+- `ui_click.wav`: UI click when adjusting volume or interacting with UI
+- `voice_levelup.wav`: optional voice line when you level up
+
 Controls for audio
 - `M` : toggle mute
 - `[` : decrease volume by 10%

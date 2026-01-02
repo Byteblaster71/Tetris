@@ -44,6 +44,11 @@ Game::Game(sf::RenderWindow &window): m_window(window) {
         m_hardDropSound = std::make_unique<sf::Sound>(m_hardDropBuffer);
         m_hardDropSound->setVolume(m_volume);
     }
+    // UI and voice sounds
+    m_uiClickLoaded = m_uiClickBuffer.loadFromFile("assets/ui_click.wav");
+    if (m_uiClickLoaded) { m_uiClickSound = std::make_unique<sf::Sound>(m_uiClickBuffer); m_uiClickSound->setVolume(m_volume); }
+    m_voiceLevelLoaded = m_voiceLevelBuffer.loadFromFile("assets/voice_levelup.wav");
+    if (m_voiceLevelLoaded) { m_voiceLevelSound = std::make_unique<sf::Sound>(m_voiceLevelBuffer); m_voiceLevelSound->setVolume(m_volume); }
 }
 
 void Game::spawnPiece() {
@@ -65,6 +70,8 @@ void Game::processInput() {
             auto key = event->getIf<sf::Event::KeyPressed>()->code;
             if (key == sf::Keyboard::Key::Escape) m_window.close();
             if (key == sf::Keyboard::Key::P) m_paused = !m_paused;
+
+            // In-game controls
             if (!m_paused && m_running) {
                 if (key == sf::Keyboard::Key::Left) {
                     auto blocks = Tetromino::getShape(m_active.type, m_active.rotation)[m_active.rotation];
@@ -78,24 +85,33 @@ void Game::processInput() {
                     // soft drop
                     auto blocks = Tetromino::getShape(m_active.type, m_active.rotation)[m_active.rotation];
                     Point newPos = m_active.position + Point{0,1};
-                    if (m_board.isValidPosition(blocks, newPos)) m_active.position = newPos;
+                    if (m_board.isValidPosition(blocks, newPos)) {
+                        m_active.position = newPos;
+                        if (m_dropSoundLoaded && m_dropSound) m_dropSound->play();
+                    }
                 } else if (key == sf::Keyboard::Key::Up) {
                     // rotate
                     int newRot = (m_active.rotation + 1) & 3;
                     auto blocks = Tetromino::getShape(m_active.type, newRot)[newRot];
-                    if (m_board.isValidPosition(blocks, m_active.position)) m_active.rotation = newRot;
-                    if (m_dropSoundLoaded && m_dropSound) m_dropSound->play();
+                    if (m_board.isValidPosition(blocks, m_active.position)) {
+                        m_active.rotation = newRot;
+                        if (m_rotateSoundLoaded && m_rotateSound) m_rotateSound->play();
+                    }
                 } else if (key == sf::Keyboard::Key::Space) {
                     hardDrop();
+                    if (m_hardDropSoundLoaded && m_hardDropSound) m_hardDropSound->play();
                 }
-            } else if (!m_running && key == sf::Keyboard::Key::R) {
-                // restart
-                    if (m_rotateSoundLoaded && m_rotateSound) m_rotateSound->play();
+            }
+
+            // Restart after game over
+            if (!m_running && key == sf::Keyboard::Key::R) {
                 m_board = Board();
                 m_running = true;
-                    if (m_hardDropSoundLoaded && m_hardDropSound) m_hardDropSound->play();
                 m_paused = false;
                 m_score = 0;
+                spawnPiece();
+            }
+
             // Global input for audio controls
             if (key == sf::Keyboard::Key::M) {
                 m_muted = !m_muted;
@@ -104,6 +120,8 @@ void Game::processInput() {
                 if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(v);
                 if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(v);
                 if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(v);
+                if (m_uiClickSound && m_uiClickLoaded) m_uiClickSound->setVolume(v);
+                if (m_voiceLevelSound && m_voiceLevelLoaded) m_voiceLevelSound->setVolume(v);
             }
             if (key == sf::Keyboard::Key::LBracket) { // decrease volume
                 m_volume = std::max(0.0f, m_volume - 10.0f);
@@ -112,6 +130,8 @@ void Game::processInput() {
                     if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(m_volume);
                     if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(m_volume);
                     if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(m_volume);
+                    if (m_uiClickSound && m_uiClickLoaded) { m_uiClickSound->setVolume(m_volume); m_uiClickSound->play(); }
+                    if (m_voiceLevelSound && m_voiceLevelLoaded) m_voiceLevelSound->setVolume(m_volume);
                 }
             }
             if (key == sf::Keyboard::Key::RBracket) { // increase volume
@@ -121,9 +141,51 @@ void Game::processInput() {
                     if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(m_volume);
                     if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(m_volume);
                     if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(m_volume);
+                    if (m_uiClickSound && m_uiClickLoaded) { m_uiClickSound->setVolume(m_volume); m_uiClickSound->play(); }
+                    if (m_voiceLevelSound && m_voiceLevelLoaded) m_voiceLevelSound->setVolume(m_volume);
                 }
             }
-                spawnPiece();
+        }
+        
+        // Mouse handling for volume slider
+        if (event->is<sf::Event::MouseButtonPressed>()) {
+            auto m = event->getIf<sf::Event::MouseButtonPressed>();
+            if (m->button == sf::Mouse::Button::Left) {
+                    sf::Vector2i pos = m->position;
+                    if (m_volumeSliderRect.contains(sf::Vector2f(static_cast<float>(pos.x), static_cast<float>(pos.y)))) {
+                        m_draggingVolume = true;
+                        float rel = (pos.x - m_volumeSliderRect.position.x) / m_volumeSliderRect.size.x;
+                        m_volume = std::clamp(rel * 100.0f, 0.0f, 100.0f);
+                        if (!m_muted && m_uiClickSound && m_uiClickLoaded) m_uiClickSound->play();
+                        // update volumes
+                        if (!m_muted) {
+                            if (m_clearSound && m_clearSoundLoaded) m_clearSound->setVolume(m_volume);
+                            if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(m_volume);
+                            if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(m_volume);
+                            if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(m_volume);
+                            if (m_voiceLevelSound && m_voiceLevelLoaded) m_voiceLevelSound->setVolume(m_volume);
+                        }
+                    }
+                }
+        }
+        if (event->is<sf::Event::MouseButtonReleased>()) {
+            auto m = event->getIf<sf::Event::MouseButtonReleased>();
+            if (m->button == sf::Mouse::Button::Left) m_draggingVolume = false;
+        }
+        if (event->is<sf::Event::MouseMoved>()) {
+                if (m_draggingVolume) {
+                auto mm = event->getIf<sf::Event::MouseMoved>();
+                float mx = static_cast<float>(mm->position.x);
+                float rel = (mx - m_volumeSliderRect.position.x) / m_volumeSliderRect.size.x;
+                m_volume = std::clamp(rel * 100.0f, 0.0f, 100.0f);
+                if (!m_muted) {
+                    if (m_clearSound && m_clearSoundLoaded) m_clearSound->setVolume(m_volume);
+                    if (m_rotateSound && m_rotateSoundLoaded) m_rotateSound->setVolume(m_volume);
+                    if (m_dropSound && m_dropSoundLoaded) m_dropSound->setVolume(m_volume);
+                    if (m_hardDropSound && m_hardDropSoundLoaded) m_hardDropSound->setVolume(m_volume);
+                    if (m_uiClickSound && m_uiClickLoaded) m_uiClickSound->setVolume(m_volume);
+                    if (m_voiceLevelSound && m_voiceLevelLoaded) m_voiceLevelSound->setVolume(m_volume);
+                }
             }
         }
     }
@@ -143,7 +205,9 @@ void Game::update(float dt) {
             int gained = (n >=1 && n <=4) ? baseScore[n] * (m_level + 1) : 0;
             m_score += gained;
             m_totalLines += n;
+            int oldLevel = m_level;
             m_level = m_totalLines / 10;
+            if (m_level > oldLevel && m_voiceLevelLoaded && m_voiceLevelSound && !m_muted) m_voiceLevelSound->play();
             m_dropInterval = std::max(0.05f, 0.8f - m_level * 0.05f);
             m_linesToClear.clear();
             m_animating = false;
@@ -242,6 +306,42 @@ void Game::render() {
         text.setFillColor(sf::Color::White);
         text.setPosition(sf::Vector2f(static_cast<float>(BoardWidth * CellSize + 10), 10.f));
         m_window.draw(text);
+    }
+
+    // draw volume slider UI on the right side
+    {
+        float sx = static_cast<float>(BoardWidth * CellSize + 10);
+        float sy = static_cast<float>(static_cast<int>(m_window.getSize().y) - 40);
+        float sw = 160.0f;
+        float sh = 12.0f;
+        m_volumeSliderRect = sf::FloatRect(sf::Vector2f(sx, sy), sf::Vector2f(sw, sh));
+
+        sf::RectangleShape bg(sf::Vector2f(sw, sh));
+        bg.setFillColor(sf::Color(80,80,80));
+        bg.setPosition(sf::Vector2f(sx, sy));
+        m_window.draw(bg);
+
+        float fillW = (m_volume / 100.0f) * sw;
+        sf::RectangleShape fill(sf::Vector2f(fillW, sh));
+        fill.setFillColor(sf::Color(200,200,200));
+        fill.setPosition(sf::Vector2f(sx, sy));
+        m_window.draw(fill);
+
+        // knob
+        sf::CircleShape knob(7.f);
+        knob.setFillColor(sf::Color::White);
+        knob.setPosition(sf::Vector2f(sx + std::max(0.f, fillW - 7.f), sy - 3.f));
+        m_window.draw(knob);
+
+        // volume text
+        if (m_fontLoaded) {
+            std::stringstream vs;
+            if (m_muted) vs << "Muted"; else vs << static_cast<int>(m_volume) << "%";
+            sf::Text vtext(m_font, vs.str(), 12);
+            vtext.setFillColor(sf::Color::White);
+            vtext.setPosition(sf::Vector2f(sx, sy - 20.f));
+            m_window.draw(vtext);
+        }
     }
 
     if (!m_running) {
